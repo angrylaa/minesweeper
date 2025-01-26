@@ -4,7 +4,7 @@ conn = psycopg2.connect(database="minesweeper",
                         host="localhost", 
                         user="postgres", 
                         password="ethoslab", 
-                        port="5432")
+                        port="5433")
 
 cursor = conn.cursor()
 
@@ -13,7 +13,10 @@ with open('game.sql', 'r') as file:
     
 cursor.execute(sql_script)
 
-print("executed")
+results = cursor.fetchall()
+
+for row in results:
+    print(row)
 
 conn.commit()
 conn.close()

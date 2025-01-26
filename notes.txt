@@ -1,0 +1,25 @@
+recusrive sql
+1. want a table w/ 1 row for each number from 1->10
+2. when using recursive sql, we want 2 columns
+    - 1st column is the current value of the variable
+    - 2nd column is the next value
+
+-> first query
+with T(N, N2) as 
+( 
+    select 1, 2 from sysibm.sysdummy1
+) // first thing u do in recursive table, we define the first row (trivial case)
+
+select N from T; --> result is 1
+
+-> recursive query
+
+with T(N, N2) as 
+( 
+    select 1, 2 from sysibm.sysdummy1 --> initial term
+    UNION ALL
+    select N2, N2 + 1 from T --> next term
+    WHERE N <= 10 --> catcher value to prevent infinte loop
+) 
+
+select N from T; --> result is 1 to 10

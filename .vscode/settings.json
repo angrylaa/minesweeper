@@ -4,10 +4,11 @@
             "previewLimit": 50,
             "server": "localhost",
             "port": 5432,
+            "askForPassword": true,
             "driver": "PostgreSQL",
-            "name": "minesweeper",
+            "name": "postgresql",
             "database": "minesweeper",
-            "username": "postgres"
+            "username": "postgresql"
         }
     ]
 }
