@@ -42,35 +42,59 @@
 
 -- creates an initial table w/ default 0 representing whether a bomb is present 
 
--- CREATE TABLE minefield_placements(
---         A BOOLEAN DEFAULT 0,
---         B BOOLEAN DEFAULT 0,
---         C BOOLEAN DEFAULT 0,
---         D BOOLEAN DEFAULT 0,
---         E BOOLEAN DEFAULT 0,
---         F BOOLEAN DEFAULT 0,
---         G BOOLEAN DEFAULT 0,
---         H BOOLEAN DEFAULT 0,
---         I BOOLEAN DEFAULT 0,
---         J BOOLEAN DEFAULT 0,
---         K BOOLEAN DEFAULT 0,
---         L BOOLEAN DEFAULT 0,
---         M BOOLEAN DEFAULT 0,
---         N BOOLEAN DEFAULT 0,
---         O BOOLEAN DEFAULT 0,
---         P BOOLEAN DEFAULT 0
---     )
+DROP TABLE IF EXISTS minefield_placements;
+CREATE TABLE IF NOT EXISTS minefield_placements(
+        row_id SERIAL PRIMARY KEY,
+        A VARCHAR(40) DEFAULT 0,
+        B VARCHAR(40) DEFAULT 0,
+        C VARCHAR(40) DEFAULT 0,
+        D VARCHAR(40) DEFAULT 0,
+        E VARCHAR(40) DEFAULT 0,
+        F VARCHAR(40) DEFAULT 0,
+        G VARCHAR(40) DEFAULT 0,
+        H VARCHAR(40) DEFAULT 0,
+        I VARCHAR(40) DEFAULT 0,
+        J VARCHAR(40) DEFAULT 0,
+        K VARCHAR(40) DEFAULT 0,
+        L VARCHAR(40) DEFAULT 0,
+        M VARCHAR(40) DEFAULT 0,
+        N VARCHAR(40) DEFAULT 0,
+        O VARCHAR(40) DEFAULT 0,
+        P VARCHAR(40) DEFAULT 0
+    );
+
+INSERT INTO minefield_placements(A) VALUES (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0);
 
 -- recursive function that places the mines
-
 WITH RECURSIVE total_mines AS 
 (
-    SELECT 40 AS mines
+    SELECT 40 AS mines, floor(random() * 16) + 1 AS x, floor(random() * 15) + 1 AS y
     UNION ALL
-    select mines - 1 from total_mines
+    SELECT mines - 1, floor(random() * 16) + 1, floor(random() * 15) + 1 from total_mines
     WHERE mines > 0 --> catcher value to prevent infinte loop
-) 
+)
+-- SELECT * FROM minefield_placements mp LEFT JOIN total_mines tm ON mp.row_id = tm.x
+UPDATE minefield_placements mp
+SET
+    A = CASE WHEN tm.y = 1 THEN 'x' ELSE A END,
+    B = CASE WHEN tm.y = 2 THEN 'x' ELSE B END,
+    C = CASE WHEN tm.y = 3 THEN 'x' ELSE C END,
+    D = CASE WHEN tm.y = 4 THEN 'x' ELSE D END,
+    E = CASE WHEN tm.y = 5 THEN 'x' ELSE E END,
+    F = CASE WHEN tm.y = 6 THEN 'x' ELSE F END,
+    G = CASE WHEN tm.y = 7 THEN 'x' ELSE G END,
+    H = CASE WHEN tm.y = 8 THEN 'x' ELSE H END,
+    I = CASE WHEN tm.y = 9 THEN 'x' ELSE I END,
+    J = CASE WHEN tm.y = 10 THEN 'x' ELSE J END,
+    K = CASE WHEN tm.y = 11 THEN 'x' ELSE K END,
+    L = CASE WHEN tm.y = 12 THEN 'x' ELSE L END,
+    M = CASE WHEN tm.y = 13 THEN 'x' ELSE M END,
+    N = CASE WHEN tm.y = 14 THEN 'x' ELSE N END,
+    O = CASE WHEN tm.y = 15 THEN 'x' ELSE O END,
+    P = CASE WHEN tm.y = 16 THEN 'x' ELSE P END
+FROM total_mines tm
+WHERE mp.row_id = tm.x;
 
-SELECT * FROM total_mines;
+SELECT * FROM minefield_placements ORDER BY row_id;
 
--- create a view based on the minefield which has numbers representing nearby bombs
+-- create a table based on the minefield which has numbers representing nearby bombs
