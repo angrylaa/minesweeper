@@ -65,9 +65,9 @@ INSERT INTO minefield("A") VALUES (0), (0), (0), (0), (0), (0), (0), (0), (0), (
 -- recursive function that places the mines
 WITH RECURSIVE generate_mines AS 
 (
-    SELECT 40 AS mine_id, floor(random() * 16) + 1 AS x, floor(random() * 15) + 1 AS y
+    SELECT 40 AS mine_id, floor(random() * 16) + 1 AS x, floor(random() * 16) + 1 AS y
     UNION ALL
-    SELECT mine_id - 1, floor(random() * 16) + 1, floor(random() * 15) + 1 from generate_mines
+    SELECT mine_id - 1, floor(random() * 16) + 1, floor(random() * 16) + 1 from generate_mines
     WHERE mine_id > 0 --> catcher value to prevent infinte loop
 ) 
 SELECT * INTO mine_table FROM generate_mines;
@@ -102,6 +102,7 @@ SELECT * FROM insert_bombs();
 -- SELECT * FROM minefield ORDER BY row_id;
 
 -- function to count adjacent bombs
+-- ALSO need to add handling for coords w/ col 1, row 1, col 16, row 16
 CREATE OR REPLACE FUNCTION count_adjacent_bombs(col_num int, row_num int)
 RETURNS INTEGER
 LANGUAGE plpgsql AS $$
