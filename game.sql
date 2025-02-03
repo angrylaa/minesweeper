@@ -147,18 +147,18 @@ CREATE OR REPLACE FUNCTION initial_count()
         col_char CHAR(1);
         adj_bombs INTEGER := 0;
     BEGIN
-        FOR r in 1..16 LOOP
-            FOR c in 1..16 LOOP
+        FOR r in 2..14 LOOP
+            FOR c in 2..14 LOOP
                 col_char := CHR(64 + c);
 
                 SELECT * FROM count_adjacent_bombs(c, r)
                 INTO adj_bombs;
 
                 EXECUTE format('
-                INSERT INTO minefield mf(%I)
-                VALUES $1
-                WHERE mf.row_id = $2', 
-                col_char) USING adj_bombs, r;
+                UPDATE minefield mf
+                SET %I = $1
+                WHERE mf.row_id = $2 AND mf.%I != $3', 
+                col_char, col_char) USING adj_bombs, r, 'M';
             END LOOP;
         END LOOP;
     END;
