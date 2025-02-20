@@ -37,6 +37,15 @@
 
 -- creates an initial table w/ default 0 representing whether a bomb is present 
 
+-- CREATE OR REPLACE FUNCTION notify(str varchar) RETURNS void AS $$
+--     LANGUAGE plpgsql AS $$
+--     BEGIN
+--         RAISE NOTICE '%', str;
+--     END
+-- $$
+
+-- CREATE EXTENSION IF NOT EXISTS dblink;
+
 DROP TABLE IF EXISTS minefield;
 CREATE TABLE IF NOT EXISTS minefield(
         row_id SERIAL PRIMARY KEY,
@@ -102,7 +111,6 @@ SELECT * FROM insert_bombs();
 -- SELECT * FROM minefield ORDER BY row_id;
 
 -- function to count adjacent bombs
--- ALSO need to add handling for coords w/ col 1, row 1, col 16, row 16
 CREATE OR REPLACE FUNCTION count_adjacent_bombs(col_num int, row_num int)
 RETURNS INTEGER
 LANGUAGE plpgsql AS $$
@@ -115,24 +123,27 @@ BEGIN
         FOR j IN -1..1 LOOP -- to bottom right
             IF i = 0 AND j = 0 THEN  -- skip the center cell
             ELSE
-                col_char := CHR(64 + col_num + j);
+                IF col_num = 1 AND j = -1 OR col_num = 16 AND j = 1 OR row_num = 1 AND i = -1 OR row_num = 16 AND i = 1 THEN
+                ELSE
+                    col_char := CHR(64 + col_num + j);
 
-                RAISE NOTICE 'Checking cell at row: %, column: % (col_char: %)', row_num + i, col_num + j, col_char;
-                
-                -- Check if the adjacent cell is a bomb
-                EXECUTE format('
-                    SELECT CASE WHEN %I = $1 THEN 1 ELSE 0 END 
-                    FROM minefield 
-                    WHERE row_id = $2
-                ', col_char)
-                INTO bomb_count
-                USING 'M', row_num + i;
+                    RAISE NOTICE 'Checking cell at row: %, column: % (col_char: %)', row_num + i, col_num + j, col_char;
+                    
+                    -- Check if the adjacent cell is a bomb
+                    EXECUTE format('
+                        SELECT CASE WHEN %I = $1 THEN 1 ELSE 0 END 
+                        FROM minefield 
+                        WHERE row_id = $2
+                    ', col_char)
+                    INTO bomb_count
+                    USING 'M', row_num + i;
 
-                RAISE NOTICE '% bombs found', bomb_count;
-                
-                total_bomb_count := total_bomb_count + bomb_count;
+                    RAISE NOTICE '% bombs found', bomb_count;
+                    
+                    total_bomb_count := total_bomb_count + bomb_count;
 
-                RAISE NOTICE '% total bombs', total_bomb_count;
+                    RAISE NOTICE '% total bombs', total_bomb_count;
+                END IF;
             END IF;
         END LOOP;
     END LOOP;
@@ -148,8 +159,8 @@ CREATE OR REPLACE FUNCTION initial_count()
         col_char CHAR(1);
         adj_bombs INTEGER := 0;
     BEGIN
-        FOR r in 2..14 LOOP
-            FOR c in 2..14 LOOP
+        FOR r in 1..16 LOOP
+            FOR c in 1..16 LOOP
                 col_char := CHR(64 + c);
 
                 SELECT * FROM count_adjacent_bombs(c, r)
