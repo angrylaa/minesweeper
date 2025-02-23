@@ -1,50 +1,4 @@
--- SQL implementation of minesweeper
-
--- main game loop is a recusive CTE which updates WHEN EXISTSever the user enters input
--- if the table is empty -> we should fill it w/ algorithm
--- once table is full it should have a 16x16 board w/ 40 bombs
--- we should have 2 tables, one that's the final answer & one that is tracking user input
-
--- [ ] [ ] [ ] [ ] --> these are all empty
--- [1] [2] [3] [4] --> these will represent the tiles
--- [F] --> user flagged that tile
--- [X] --> marks bombs (should not be shown to user)
-
--- zero-open -> this is how to start the game (if a revealed cell is zero, reveal all its neighbours)
--- a 4 way flood -> how to determine WHEN EXISTS to show users tiles
-
--- CREATE OR REPLACE FUNCTION print_state() LANGUAGE plpgsql AS
--- BEGIN
---   RAISE NOTICE '%';
--- END
-
--- WITH RECURSIVE t(i) AS (
---     -- non-recursive term
---     SELECT 1
---     UNION ALL
---     -- recursive term
---     SELECT i + 1 -- takes i of the previous row and adds 1
---     SELECT print_state()
---     FROM t -- self-reference that enables recursion
---     WHERE i < 100 -- WHEN EXISTS i = 5, the CTE stops
--- )
--- SELECT *
--- FROM t;
-
--- one table for the bombs & numbers, generated at the beginning
--- one table for user inputs (navigating)
--- one table that is the visual display for the user
-
--- creates an initial table w/ default 0 representing whether a bomb is present 
-
--- CREATE OR REPLACE FUNCTION notify(str varchar) RETURNS void AS $$
---     LANGUAGE plpgsql AS $$
---     BEGIN
---         RAISE NOTICE '%', str;
---     END
--- $$
-
--- CREATE EXTENSION IF NOT EXISTS dblink;
+INSERT INTO user_position (positionX, positionY) VALUES (0,0);
 
 DROP TABLE IF EXISTS minefield;
 CREATE TABLE IF NOT EXISTS minefield(
@@ -177,3 +131,87 @@ CREATE OR REPLACE FUNCTION initial_count()
 $$;
 
 SELECT * FROM initial_count();
+
+-- SETUP FOR PLAYER INPUT
+
+DROP TABLE IF EXISTS user_position;
+CREATE TABLE IF NOT EXISTS user_position(
+    id SERIAL PRIMARY KEY,
+    positionX INTEGER NOT NULL,
+    positionY INTEGER NOT NULL,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+DROP TABLE IF EXISTS user_action;
+CREATE TABLE IF NOT EXISTS user_action(
+    id SERIAL PRIMARY KEY,
+    positionX INTEGER NOT NULL,
+    positionY INTEGER NOT NULL,
+    action_type VARCHAR(40) NOT NULL,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE OR REPLACE FUNCTION notify(str varchar) RETURNS void AS $$
+BEGIN
+    RAISE NOTICE '%', str;
+END
+$$ LANGUAGE PLPGSQL;
+
+CREATE OR REPLACE FUNCTION move_up() RETURNS VOID AS $$
+BEGIN
+    UPDATE user_position
+    SET positionY = positionY + 1
+    WHERE id = 1 AND positionY != 16;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION move_down() RETURNS VOID AS $$
+BEGIN
+    UPDATE user_position
+    SET positionY = positionY - 1
+    WHERE id = 1 AND positionY != 0;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION move_left() RETURNS VOID AS $$
+BEGIN
+    UPDATE user_position
+    SET positionX = positionX - 1
+    WHERE id = 1 AND positionX != 0;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION move_right() RETURNS VOID AS $$
+BEGIN
+    UPDATE user_position
+    SET positionX = positionX + 1
+    WHERE id = 1 AND positionX != 16;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION flag() RETURNS VOID AS $$
+BEGIN
+    INSERT INTO user_action(positionX, positionY, action_type) 
+    SELECT up.positionX, up.positionY, 'F'
+    FROM user_position up
+    WHERE id = 1;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION mark() RETURNS VOID AS $$
+BEGIN
+    INSERT INTO user_action(positionX, positionY, action_type) 
+    SELECT up.positionX, up.positionY, 'M'
+    FROM user_position up
+    WHERE id = 1;
+END;
+$$ LANGUAGE plpgsql;
+
+-- BOARD DISPLAY
+
+-- function needs to parse all available information & latest state of map (minefield)
+-- 1. user position & user action
+-- 2. map state
+-- THEN:
+-- very first user selection -> zero-open -> this is how to start the game (if a revealed cell is zero, reveal all its neighbours)
+-- a 4 way flood -> how to determine WHEN EXISTS to show users tiles
