@@ -1,5 +1,3 @@
-INSERT INTO user_position (positionX, positionY) VALUES (0,0);
-
 DROP TABLE IF EXISTS minefield;
 CREATE TABLE IF NOT EXISTS minefield(
         row_id SERIAL PRIMARY KEY,
@@ -24,6 +22,29 @@ CREATE TABLE IF NOT EXISTS minefield(
 DROP TABLE IF EXISTS mine_table;
 
 INSERT INTO minefield("A") VALUES (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0);
+
+DROP TABLE IF EXISTS user_display;
+CREATE TABLE IF NOT EXISTS user_display(
+        row_id SERIAL PRIMARY KEY,
+        "A" VARCHAR(40) DEFAULT '[ - ]',
+        "B" VARCHAR(40) DEFAULT '[ - ]',
+        "C" VARCHAR(40) DEFAULT '[ - ]',
+        "D" VARCHAR(40) DEFAULT '[ - ]',
+        "E" VARCHAR(40) DEFAULT '[ - ]',
+        "F" VARCHAR(40) DEFAULT '[ - ]',
+        "G" VARCHAR(40) DEFAULT '[ - ]',
+        "H" VARCHAR(40) DEFAULT '[ - ]',
+        "I" VARCHAR(40) DEFAULT '[ - ]',
+        "J" VARCHAR(40) DEFAULT '[ - ]',
+        "K" VARCHAR(40) DEFAULT '[ - ]',
+        "L" VARCHAR(40) DEFAULT '[ - ]',
+        "M" VARCHAR(40) DEFAULT '[ - ]',
+        "N" VARCHAR(40) DEFAULT '[ - ]',
+        "O" VARCHAR(40) DEFAULT '[ - ]',
+        "P" VARCHAR(40) DEFAULT '[ - ]'
+    );
+
+INSERT INTO user_display("A") VALUES ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]');
 
 -- recursive function that places the mines
 WITH RECURSIVE generate_mines AS 
@@ -151,6 +172,9 @@ CREATE TABLE IF NOT EXISTS user_action(
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+INSERT INTO user_position (positionX, positionY) VALUES (0,0);
+INSERT INTO user_action (positionX, positionY, action_type) VALUES (0,0,'N');
+
 CREATE OR REPLACE FUNCTION notify(str varchar) RETURNS void AS $$
 BEGIN
     RAISE NOTICE '%', str;
@@ -190,19 +214,33 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION flag() RETURNS VOID AS $$
+DECLARE
+    uCol INTEGER := 0;
+    uRow INTEGER := 0;
 BEGIN
-    INSERT INTO user_action(positionX, positionY, action_type) 
-    SELECT up.positionX, up.positionY, 'F'
+    SELECT up.positionX, up.positionY
+    INTO uRow, uCol
     FROM user_position up
+    WHERE up.id = 1;
+
+    UPDATE user_action
+    SET positionX = uRow, positionY = uCol, action_type = 'F'
     WHERE id = 1;
 END;
 $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION mark() RETURNS VOID AS $$
+DECLARE
+    uCol INTEGER := 0;
+    uRow INTEGER := 0;
 BEGIN
-    INSERT INTO user_action(positionX, positionY, action_type) 
-    SELECT up.positionX, up.positionY, 'M'
+    SELECT up.positionX, up.positionY
+    INTO uRow, uCol
     FROM user_position up
+    WHERE up.id = 1;
+
+    UPDATE user_action
+    SET positionX = uRow, positionY = uCol, action_type = 'M'
     WHERE id = 1;
 END;
 $$ LANGUAGE plpgsql;
@@ -215,3 +253,51 @@ $$ LANGUAGE plpgsql;
 -- THEN:
 -- very first user selection -> zero-open -> this is how to start the game (if a revealed cell is zero, reveal all its neighbours)
 -- a 4 way flood -> how to determine WHEN EXISTS to show users tiles
+
+DROP FUNCTION display_state();
+
+CREATE OR REPLACE FUNCTION display_state() RETURNS TABLE(
+        "A" VARCHAR(40),
+        "B" VARCHAR(40),
+        "C" VARCHAR(40),
+        "D" VARCHAR(40),
+        "E" VARCHAR(40),
+        "F" VARCHAR(40),
+        "G" VARCHAR(40),
+        "H" VARCHAR(40),
+        "I" VARCHAR(40),
+        "J" VARCHAR(40),
+        "K" VARCHAR(40),
+        "L" VARCHAR(40),
+        "M" VARCHAR(40),
+        "N" VARCHAR(40),
+        "O" VARCHAR(40),
+        "P" VARCHAR(40)
+)
+LANGUAGE plpgsql AS $$
+#variable_conflict use_column
+DECLARE
+    uCol INTEGER := 0;
+    uRow INTEGER := 0;
+    uAction CHAR(10) := 'N';
+BEGIN
+    SELECT up.positionX, up.positionY
+    INTO uRow, uCol
+    FROM user_position up
+    WHERE up.id = 1;
+
+    SELECT uA.action_type
+    INTO uAction
+    FROM user_action ua
+    WHERE ua.id = 1;
+
+
+
+
+    RETURN QUERY SELECT "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P" FROM user_display;
+
+    -- display table
+
+    -- then update user position back to [ - ]
+END;
+$$;

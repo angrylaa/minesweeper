@@ -28,6 +28,9 @@ action_map = {
     'm': "SELECT mark()",
 }
 
+def parse_row(record):
+    print(record)
+
 def execute_action(action):
     if action.lower() in action_map:
         try:
@@ -48,7 +51,10 @@ while True:
         execute_action(key)
         conn.commit()
 
-        cursor.execute("SELECT show_map()")
-        conn.commit()
+        cursor.execute("SELECT display_state()")
+        for record in cursor:
+            cleaned_line = record[0].translate({ord(c): None for c in ',()'})
+            print(cleaned_line.replace("'", "").replace('"',""))
+            # print(record[0].replace("'","").replace('"',"").replace(",", "").replace("(","").replace(")",""))
 
 conn.close()
