@@ -172,7 +172,7 @@ CREATE TABLE IF NOT EXISTS user_action(
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-INSERT INTO user_position (positionX, positionY) VALUES (0,0);
+INSERT INTO user_position (positionX, positionY) VALUES (1,1);
 INSERT INTO user_action (positionX, positionY, action_type) VALUES (0,0,'N');
 
 CREATE OR REPLACE FUNCTION notify(str varchar) RETURNS void AS $$
@@ -184,32 +184,32 @@ $$ LANGUAGE PLPGSQL;
 CREATE OR REPLACE FUNCTION move_up() RETURNS VOID AS $$
 BEGIN
     UPDATE user_position
-    SET positionY = positionY + 1
-    WHERE id = 1 AND positionY != 16;
+    SET positionX = positionX - 1
+    WHERE id = 1 AND positionX != 1;
 END;
 $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION move_down() RETURNS VOID AS $$
 BEGIN
     UPDATE user_position
-    SET positionY = positionY - 1
-    WHERE id = 1 AND positionY != 0;
+    SET positionX = positionX + 1
+    WHERE id = 1 AND positionX != 16;
 END;
 $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION move_left() RETURNS VOID AS $$
 BEGIN
     UPDATE user_position
-    SET positionX = positionX - 1
-    WHERE id = 1 AND positionX != 0;
+    SET positionY = positionY - 1
+    WHERE id = 1 AND positionY != 1;
 END;
 $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION move_right() RETURNS VOID AS $$
 BEGIN
     UPDATE user_position
-    SET positionX = positionX + 1
-    WHERE id = 1 AND positionX != 16;
+    SET positionY = positionY + 1
+    WHERE id = 1 AND positionY != 16;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -279,7 +279,8 @@ LANGUAGE plpgsql AS $$
 DECLARE
     uCol INTEGER := 0;
     uRow INTEGER := 0;
-    uAction CHAR(10) := 'N';
+    col_char VARCHAR(1) := '';
+    uAction VARCHAR(10) := '';
 BEGIN
     SELECT up.positionX, up.positionY
     INTO uRow, uCol
@@ -290,14 +291,40 @@ BEGIN
     INTO uAction
     FROM user_action ua
     WHERE ua.id = 1;
+    
+    col_char := CHR(64 + uCol);
 
+    EXECUTE format('
+        UPDATE user_display ud
+        SET %I = $1
+        WHERE ud.row_id = $2
+    ', col_char) USING '[ X ]', uRow;
 
-
-
-    RETURN QUERY SELECT "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P" FROM user_display;
+    RETURN QUERY SELECT "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P" FROM user_display ORDER BY row_id;
 
     -- display table
 
     -- then update user position back to [ - ]
 END;
 $$;
+
+CREATE OR REPLACE FUNCTION clear_movement() RETURNS VOID AS $$
+DECLARE
+    uCol INTEGER := 0;
+    uRow INTEGER := 0;
+    col_char VARCHAR(1) := '';
+BEGIN
+    SELECT up.positionX, up.positionY
+    INTO uRow, uCol
+    FROM user_position up
+    WHERE up.id = 1;
+    
+    col_char := CHR(64 + uCol);
+
+    EXECUTE format('
+        UPDATE user_display ud
+        SET %I = $1
+        WHERE ud.row_id = $2
+    ', col_char) USING '[ - ]', uRow;
+END $$
+LANGUAGE plpgsql;

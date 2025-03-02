@@ -53,8 +53,10 @@ while True:
 
         cursor.execute("SELECT display_state()")
         for record in cursor:
-            cleaned_line = record[0].translate({ord(c): None for c in ',()'})
-            print(cleaned_line.replace("'", "").replace('"',""))
-            # print(record[0].replace("'","").replace('"',"").replace(",", "").replace("(","").replace(")",""))
+            cleaned_line = record[0].translate({ord(c): None for c in ',()"'})
+            print(cleaned_line.replace("'", ""))
+
+        cursor.execute("SELECT clear_movement()")
+
 
 conn.close()
