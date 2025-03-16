@@ -28,13 +28,9 @@ action_map = {
     'm': "SELECT mark()",
 }
 
-def parse_row(record):
-    print(record)
-
 def execute_action(action):
     if action.lower() in action_map:
         try:
-            print(f"EXECUTED: {action_map[action]}")
             cursor.execute(action_map[action])
             conn.commit()
         except Exception as e:
@@ -45,13 +41,13 @@ while True:
     event = keyboard.read_event()
     if event.event_type == keyboard.KEY_DOWN:
         key = event.name
-        print(key)
         if key == "q":
             break
         execute_action(key)
         conn.commit()
 
         cursor.execute("SELECT display_state()")
+        print('\n')
         for record in cursor:
             cleaned_line = record[0].translate({ord(c): None for c in ',()"'})
             print(cleaned_line.replace("'", ""))

@@ -1,3 +1,9 @@
+CREATE OR REPLACE FUNCTION notify(str varchar) RETURNS void AS $$
+BEGIN
+    RAISE NOTICE '%', str;
+END
+$$ LANGUAGE PLPGSQL;
+
 DROP TABLE IF EXISTS minefield;
 CREATE TABLE IF NOT EXISTS minefield(
         row_id SERIAL PRIMARY KEY,
@@ -20,6 +26,11 @@ CREATE TABLE IF NOT EXISTS minefield(
     );
 
 DROP TABLE IF EXISTS mine_table;
+CREATE TABLE IF NOT EXISTS mine_table(
+    mine_id INTEGER,
+    x INTEGER,
+    y INTEGER
+);
 
 INSERT INTO minefield("A") VALUES (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0);
 
@@ -46,15 +57,38 @@ CREATE TABLE IF NOT EXISTS user_display(
 
 INSERT INTO user_display("A") VALUES ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]');
 
--- recursive function that places the mines
-WITH RECURSIVE generate_mines AS 
-(
-    SELECT 40 AS mine_id, floor(random() * 16) + 1 AS x, floor(random() * 16) + 1 AS y
-    UNION ALL
-    SELECT mine_id - 1, floor(random() * 16) + 1, floor(random() * 16) + 1 from generate_mines
-    WHERE mine_id > 0 --> catcher value to prevent infinte loop
-) 
-SELECT * INTO mine_table FROM generate_mines;
+CREATE OR REPLACE FUNCTION generate_mines()
+    RETURNS void
+    LANGUAGE plpgsql AS $$
+    DECLARE
+        x_cord INTEGER := 0;
+        y_cord INTEGER := 0;
+        duplicate INTEGER := 0;
+        total_bombs INTEGER := 1;
+    BEGIN
+        WHILE total_bombs < 41 LOOP
+            y_cord = floor(random() * 16) + 1;
+            x_cord = floor(random() * 16) + 1;
+
+            EXECUTE format('
+                SELECT COUNT(*)
+                FROM mine_table mt
+                WHERE mt.x = $1 AND mt.y = $2
+            ')
+            INTO duplicate
+            USING x_cord, y_cord; 
+
+            IF duplicate = 0 THEN
+                INSERT INTO mine_table (mine_id, x, y)
+                VALUES(total_bombs, x_cord, y_cord);
+
+                total_bombs = total_bombs + 1;
+            END IF;
+        END LOOP;
+    END;
+$$;
+
+SELECT * FROM generate_mines();
 
 -- insert the bombs into the mine_table
 CREATE OR REPLACE FUNCTION insert_bombs()
@@ -71,19 +105,18 @@ CREATE OR REPLACE FUNCTION insert_bombs()
             FROM mine_table mt
             WHERE mt.mine_id = i;
 
-            col_char := CHR(64 + y_cord);
+            col_char := CHR(64 + x_cord);
 
             EXECUTE format('
                 UPDATE minefield mf
                 SET %I = $1
                 WHERE mf.row_id = $2
-            ', col_char) USING 'M', x_cord;
+            ', col_char) USING 'M', y_cord;
         END LOOP;
     END;
     $$;
 
 SELECT * FROM insert_bombs();
--- SELECT * FROM minefield ORDER BY row_id;
 
 -- function to count adjacent bombs
 CREATE OR REPLACE FUNCTION count_adjacent_bombs(col_num int, row_num int)
@@ -151,7 +184,7 @@ CREATE OR REPLACE FUNCTION initial_count()
     END;
 $$;
 
-SELECT * FROM initial_count();
+SELECT initial_count();
 
 -- SETUP FOR PLAYER INPUT
 
@@ -172,14 +205,39 @@ CREATE TABLE IF NOT EXISTS user_action(
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-INSERT INTO user_position (positionX, positionY) VALUES (1,1);
-INSERT INTO user_action (positionX, positionY, action_type) VALUES (0,0,'N');
+-- need to find first available 0!
+CREATE OR REPLACE FUNCTION startingPoint()
+    RETURNS VOID AS $$
+    DECLARE 
+        col_char VARCHAR(1) := '';
+        bomb_count VARCHAR(1) := 0;
+    BEGIN
+        FOR colIterate IN 1..16 LOOP
+            FOR rowIterate IN 1..16 LOOP
 
-CREATE OR REPLACE FUNCTION notify(str varchar) RETURNS void AS $$
-BEGIN
-    RAISE NOTICE '%', str;
-END
-$$ LANGUAGE PLPGSQL;
+                col_char := CHR(64 + colIterate);
+        
+                EXECUTE format('
+                    SELECT mf.%I
+                    FROM minefield mf
+                    WHERE row_id = $1', col_char)
+                INTO bomb_count
+                USING rowIterate;
+
+
+                -- TODO: gotta fix this, keeps erroring and saying no destination & does not insert properly into user position
+
+                IF bomb_count = '0' THEN
+                    SELECT notify(format('%s, %s, %s', bomb_count, colIterate, rowIterate));
+                    INSERT INTO user_position (positionX, positionY) VALUES (colIterate, rowIterate);
+                    EXIT;
+                END IF;
+            END LOOP;
+        END LOOP;
+    END
+$$ LANGUAGE plpgsql;
+
+INSERT INTO user_action (positionX, positionY, action_type) VALUES (0,0,'N');
 
 CREATE OR REPLACE FUNCTION move_up() RETURNS VOID AS $$
 BEGIN
@@ -245,6 +303,22 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+CREATE OR REPLACE FUNCTION enter_action(uCol int, uRow int, uAct char) RETURNS VOID AS $$
+DECLARE
+    col_char VARCHAR(1) := '';
+    current_value VARCHAR(1) := '';
+BEGIN
+    col_char := CHR(64 + uCol);
+
+    EXECUTE format('
+        SELECT mf.%I
+        FROM minefield mf
+        WHERE row_id = $1',
+        col_char) USING uRow;
+    
+END;
+$$ LANGUAGE plpgsql;
+
 -- BOARD DISPLAY
 
 -- function needs to parse all available information & latest state of map (minefield)
@@ -255,7 +329,6 @@ $$ LANGUAGE plpgsql;
 -- a 4 way flood -> how to determine WHEN EXISTS to show users tiles
 
 DROP FUNCTION display_state();
-
 CREATE OR REPLACE FUNCTION display_state() RETURNS TABLE(
         "A" VARCHAR(40),
         "B" VARCHAR(40),
@@ -300,11 +373,9 @@ BEGIN
         WHERE ud.row_id = $2
     ', col_char) USING '[ X ]', uRow;
 
+    PERFORM enter_action(uCol, uRow, uAction);
+
     RETURN QUERY SELECT "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P" FROM user_display ORDER BY row_id;
-
-    -- display table
-
-    -- then update user position back to [ - ]
 END;
 $$;
 
