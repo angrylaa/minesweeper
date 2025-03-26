@@ -338,15 +338,29 @@ BEGIN
         -- zero open
         PERFORM nearest_neighbours(uCol, uRow);
     END IF;
+
+    EXECUTE format('
+        UPDATE user_display ud
+        SET %I = $1
+        WHERE ud.row_id = $2
+    ', col_char) USING '[ X ]', uRow;
 END;
 $$ LANGUAGE plpgsql;
 
-DROP FUNCTION nearest_neighbours(uCol int, uRow int);
+CREATE TABLE IF NOT EXISTS visited(
+    id SERIAL PRIMARY KEY,
+    positionX INTEGER NOT NULL,
+    positionY INTEGER NOT NULL
+);
+
 CREATE OR REPLACE FUNCTION nearest_neighbours(uCol int, uRow int) RETURNS VOID AS $$
 DECLARE
     col_char VARCHAR(1) := '';
     bomb_count VARCHAR(1) := '';
+    is_visited INTEGER := 0;
 BEGIN
+    RAISE INFO 'NEAREST NEIGHBOUR RUNS';
+
     FOR i IN -1..1 LOOP -- check from top left
         FOR j IN -1..1 LOOP -- to bottom right
             IF i = 0 AND j = 0 THEN  -- skip the center cell
@@ -394,9 +408,28 @@ BEGIN
                         col_char)
                     USING bomb_count, uRow + i;
 
-                    -- only recursive function IF the user display is [ - ] AKA untouched
-                    IF bomb_count = '0' THEN
-                        -- TODO: recursive call
+                    SELECT count(*)
+                    FROM visited v
+                    WHERE v.positionX = uCol + j AND v.positionY = uRow + i
+                    INTO is_visited;
+
+                    RAISE INFO '% VISITED BEFORE', is_visited; 
+
+                    IF is_visited = 0 THEN
+                        EXECUTE format('
+                            INSERT INTO visited(positionX, positionY)
+                            VALUES ($1, $2)
+                        ')
+                        USING uCol + j, uRow + i;
+
+                        -- only recursive function IF the user display is [ - ] AKA untouched
+                        IF bomb_count = '0' THEN
+                            -- TODO: recursive call
+                            
+                            RAISE INFO 'RECURSIVE CALL HERE'; 
+
+                            PERFORM nearest_neighbours(uCol + j, uRow + i);
+                        END IF;
                     END IF;
 
                 END IF;
@@ -492,6 +525,8 @@ DECLARE
     uRow INTEGER := 0;
     col_char VARCHAR(1) := '';
     previous VARCHAR(40) := '[ - ]';
+    bomb_count VARCHAR(1) := ''; 
+    uAction VARCHAR(1) := 'N';
 BEGIN
     SELECT up.positionY, up.positionX
     INTO uRow, uCol
@@ -511,9 +546,34 @@ BEGIN
         WHERE ud.row_id = $2
     ', col_char) USING previous, uRow;
 
+    
+    SELECT uA.action_type
+    INTO uAction
+    FROM user_action ua
+    WHERE ua.id = 1;
+    
+    IF uAction = 'F' THEN
+        EXECUTE format('
+            SELECT mf.%I
+            FROM minefield mf
+            WHERE mf.row_id = $1', col_char)
+        INTO bomb_count
+        USING uRow;
+
+        previous := '[ ' || bomb_count || ' ]';
+
+        EXECUTE format('
+            UPDATE user_display ud
+            SET %I = $1
+            WHERE ud.row_id = $2', col_char)
+        USING previous, uRow;
+    END IF;
+
     UPDATE user_action ua
     SET action_type = 'N'
     WHERE ua.id = 1;
+
+    DELETE FROM visited;
 
 END $$
 LANGUAGE plpgsql;
