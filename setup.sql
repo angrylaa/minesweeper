@@ -1,30 +1,30 @@
-CREATE OR REPLACE FUNCTION notify(str varchar) RETURNS void AS $$
-BEGIN
-    RAISE NOTICE '%', str;
-END
-$$ LANGUAGE PLPGSQL;
+-- ########################################
+-- SET UP THE GAME TABLES & STARTING STATES
+-- ########################################
 
+-- minefield -> defines actual bombs placement & map
 DROP TABLE IF EXISTS minefield;
 CREATE TABLE IF NOT EXISTS minefield(
-        row_id SERIAL PRIMARY KEY,
-        "A" VARCHAR(40) DEFAULT 0,
-        "B" VARCHAR(40) DEFAULT 0,
-        "C" VARCHAR(40) DEFAULT 0,
-        "D" VARCHAR(40) DEFAULT 0,
-        "E" VARCHAR(40) DEFAULT 0,
-        "F" VARCHAR(40) DEFAULT 0,
-        "G" VARCHAR(40) DEFAULT 0,
-        "H" VARCHAR(40) DEFAULT 0,
-        "I" VARCHAR(40) DEFAULT 0,
-        "J" VARCHAR(40) DEFAULT 0,
-        "K" VARCHAR(40) DEFAULT 0,
-        "L" VARCHAR(40) DEFAULT 0,
-        "M" VARCHAR(40) DEFAULT 0,
-        "N" VARCHAR(40) DEFAULT 0,
-        "O" VARCHAR(40) DEFAULT 0,
-        "P" VARCHAR(40) DEFAULT 0
-    );
+    row_id SERIAL PRIMARY KEY,
+    "A" VARCHAR(40) DEFAULT 0,
+    "B" VARCHAR(40) DEFAULT 0,
+    "C" VARCHAR(40) DEFAULT 0,
+    "D" VARCHAR(40) DEFAULT 0,
+    "E" VARCHAR(40) DEFAULT 0,
+    "F" VARCHAR(40) DEFAULT 0,
+    "G" VARCHAR(40) DEFAULT 0,
+    "H" VARCHAR(40) DEFAULT 0,
+    "I" VARCHAR(40) DEFAULT 0,
+    "J" VARCHAR(40) DEFAULT 0,
+    "K" VARCHAR(40) DEFAULT 0,
+    "L" VARCHAR(40) DEFAULT 0,
+    "M" VARCHAR(40) DEFAULT 0,
+    "N" VARCHAR(40) DEFAULT 0,
+    "O" VARCHAR(40) DEFAULT 0,
+    "P" VARCHAR(40) DEFAULT 0
+);
 
+-- contains all 40 mines & their coords
 DROP TABLE IF EXISTS mine_table;
 CREATE TABLE IF NOT EXISTS mine_table(
     mine_id INTEGER,
@@ -32,30 +32,78 @@ CREATE TABLE IF NOT EXISTS mine_table(
     y INTEGER
 );
 
-INSERT INTO minefield("A") VALUES (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0);
-
+-- user display is what is returned to the user & what they see
 DROP TABLE IF EXISTS user_display;
 CREATE TABLE IF NOT EXISTS user_display(
-        row_id SERIAL PRIMARY KEY,
-        "A" VARCHAR(40) DEFAULT '[ - ]',
-        "B" VARCHAR(40) DEFAULT '[ - ]',
-        "C" VARCHAR(40) DEFAULT '[ - ]',
-        "D" VARCHAR(40) DEFAULT '[ - ]',
-        "E" VARCHAR(40) DEFAULT '[ - ]',
-        "F" VARCHAR(40) DEFAULT '[ - ]',
-        "G" VARCHAR(40) DEFAULT '[ - ]',
-        "H" VARCHAR(40) DEFAULT '[ - ]',
-        "I" VARCHAR(40) DEFAULT '[ - ]',
-        "J" VARCHAR(40) DEFAULT '[ - ]',
-        "K" VARCHAR(40) DEFAULT '[ - ]',
-        "L" VARCHAR(40) DEFAULT '[ - ]',
-        "M" VARCHAR(40) DEFAULT '[ - ]',
-        "N" VARCHAR(40) DEFAULT '[ - ]',
-        "O" VARCHAR(40) DEFAULT '[ - ]',
-        "P" VARCHAR(40) DEFAULT '[ - ]'
-    );
+    row_id SERIAL PRIMARY KEY,
+    "A" VARCHAR(40) DEFAULT '[ - ]',
+    "B" VARCHAR(40) DEFAULT '[ - ]',
+    "C" VARCHAR(40) DEFAULT '[ - ]',
+    "D" VARCHAR(40) DEFAULT '[ - ]',
+    "E" VARCHAR(40) DEFAULT '[ - ]',
+    "F" VARCHAR(40) DEFAULT '[ - ]',
+    "G" VARCHAR(40) DEFAULT '[ - ]',
+    "H" VARCHAR(40) DEFAULT '[ - ]',
+    "I" VARCHAR(40) DEFAULT '[ - ]',
+    "J" VARCHAR(40) DEFAULT '[ - ]',
+    "K" VARCHAR(40) DEFAULT '[ - ]',
+    "L" VARCHAR(40) DEFAULT '[ - ]',
+    "M" VARCHAR(40) DEFAULT '[ - ]',
+    "N" VARCHAR(40) DEFAULT '[ - ]',
+    "O" VARCHAR(40) DEFAULT '[ - ]',
+    "P" VARCHAR(40) DEFAULT '[ - ]'
+);
 
+-- track the user's position
+DROP TABLE IF EXISTS user_position;
+CREATE TABLE IF NOT EXISTS user_position(
+    id SERIAL PRIMARY KEY,
+    positionX INTEGER NOT NULL,
+    positionY INTEGER NOT NULL
+);
+
+-- track the user's last action
+DROP TABLE IF EXISTS user_action;
+CREATE TABLE IF NOT EXISTS user_action(
+    id SERIAL PRIMARY KEY,
+    positionX INTEGER NOT NULL,
+    positionY INTEGER NOT NULL,
+    action_type VARCHAR(40) NOT NULL
+);
+
+-- tracks all flags user places
+DROP TABLE IF EXISTS flags;
+CREATE TABLE IF NOT EXISTS flags(
+    row_id SERIAL PRIMARY KEY,
+    positionX INTEGER NOT NULL,
+    positionY INTEGER NOT NULL
+);
+
+-- tracks what the tile under the user's current position is
+-- this is used to ensure that once the user leaves that tile, the state is maintained
+DROP TABLE IF EXISTS prev_tile;
+CREATE TABLE IF NOT EXISTS prev_tile(
+    row_id SERIAL PRIMARY KEY,
+    prev VARCHAR(40)
+);
+
+-- used in recursive function during zero-open
+-- cleared after zero open
+CREATE TABLE IF NOT EXISTS visited(
+    id SERIAL PRIMARY KEY,
+    positionX INTEGER NOT NULL,
+    positionY INTEGER NOT NULL
+);
+
+-- INSERT & BEGINNING STAGE OF TABLES
+INSERT INTO minefield("A") VALUES (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0);
 INSERT INTO user_display("A") VALUES ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]');
+INSERT INTO user_action (positionX, positionY, action_type) VALUES (0,0,'N');
+INSERT INTO prev_tile(prev) VALUES('[ - ]');
+
+-- ########################################
+-- ########### BEGIN GAME LOOP ############
+-- ########################################
 
 CREATE OR REPLACE FUNCTION generate_mines()
     RETURNS void
@@ -186,25 +234,6 @@ $$;
 
 SELECT initial_count();
 
--- SETUP FOR PLAYER INPUT
-
-DROP TABLE IF EXISTS user_position;
-CREATE TABLE IF NOT EXISTS user_position(
-    id SERIAL PRIMARY KEY,
-    positionX INTEGER NOT NULL,
-    positionY INTEGER NOT NULL,
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-DROP TABLE IF EXISTS user_action;
-CREATE TABLE IF NOT EXISTS user_action(
-    id SERIAL PRIMARY KEY,
-    positionX INTEGER NOT NULL,
-    positionY INTEGER NOT NULL,
-    action_type VARCHAR(40) NOT NULL,
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
 CREATE OR REPLACE FUNCTION startingPoint()
     RETURNS VOID AS $$
     DECLARE 
@@ -249,8 +278,6 @@ CREATE OR REPLACE FUNCTION startingPoint()
 $$ LANGUAGE plpgsql;
 
 SELECT startingPoint();
-
-INSERT INTO user_action (positionX, positionY, action_type) VALUES (0,0,'N');
 
 CREATE OR REPLACE FUNCTION move_up() RETURNS VOID AS $$
 BEGIN
@@ -316,13 +343,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TABLE IF EXISTS flags;
-CREATE TABLE IF NOT EXISTS flags(
-    row_id SERIAL PRIMARY KEY,
-    positionX INTEGER NOT NULL,
-    positionY INTEGER NOT NULL
-);
-
 CREATE OR REPLACE FUNCTION enter_action(uCol int, uRow int, uAct char) RETURNS VOID AS $$
 DECLARE
     col_char VARCHAR(1) := '';
@@ -341,7 +361,7 @@ BEGIN
     
     RAISE INFO '%, %', bomb_count, uAct;
 
-    IF uAct = 'M' THEN
+    IF bomb_count = '0' AND uAct = 'M' THEN
         -- zero open
         PERFORM nearest_neighbours(uCol, uRow);
     END IF;
@@ -389,12 +409,6 @@ BEGIN
     
 END;
 $$ LANGUAGE plpgsql;
-
-CREATE TABLE IF NOT EXISTS visited(
-    id SERIAL PRIMARY KEY,
-    positionX INTEGER NOT NULL,
-    positionY INTEGER NOT NULL
-);
 
 CREATE OR REPLACE FUNCTION nearest_neighbours(uCol int, uRow int) RETURNS VOID AS $$
 DECLARE
@@ -490,14 +504,6 @@ $$ LANGUAGE plpgsql;
 -- THEN:
 -- very first user selection -> zero-open -> this is how to start the game (if a revealed cell is zero, reveal all its neighbours)
 -- a 4 way flood -> how to determine WHEN EXISTS to show users tiles
-
-DROP TABLE IF EXISTS prev_tile;
-CREATE TABLE IF NOT EXISTS prev_tile(
-    row_id SERIAL PRIMARY KEY,
-    prev VARCHAR(40)
-);
-
-INSERT INTO prev_tile(prev) VALUES('[ - ]');
 
 DROP FUNCTION display_state();
 CREATE OR REPLACE FUNCTION display_state() RETURNS TABLE(
