@@ -1,6 +1,10 @@
 # converts user inputs into SQL commands
 import psycopg2
 import keyboard
+import os
+
+def clear_terminal():
+    os.system('cls' if os.name == 'nt' else 'clear')
 
 conn = psycopg2.connect(database="minesweeper", 
                         host="localhost", 
@@ -36,14 +40,13 @@ def execute_action(action):
         except Exception as e:
             print(e)
 
-print("Enter movement keys (WASD) or actions (M/F). Type 'exit' to quit.")
+print("Enter movement keys (WASD) to move your icon -> ★ \nActions -> (M to open a spot / F to flag a spot).")
 
 # print initial state
 cursor.execute("SELECT display_state()")
-print('\n')
 for record in cursor:
     cleaned_line = record[0].translate({ord(c): None for c in ',()"'})
-    print(cleaned_line.replace("'", ""))
+    print(cleaned_line.replace("F", "⚑").replace("X","★").replace("-"," "))
 cursor.execute("SELECT clear_movement()")
 
 
@@ -59,10 +62,10 @@ while True:
         conn.commit()
 
         cursor.execute("SELECT display_state()")
-        print('\n')
+        clear_terminal()
         for record in cursor:
             cleaned_line = record[0].translate({ord(c): None for c in ',()"'})
-            print(cleaned_line.replace("'", ""))
+            print(cleaned_line.replace("F", "⚑").replace("X", "★").replace("-"," "))
 
         cursor.execute("SELECT clear_movement()")
 

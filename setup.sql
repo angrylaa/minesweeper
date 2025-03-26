@@ -175,9 +175,9 @@ CREATE OR REPLACE FUNCTION initial_count()
                 INTO adj_bombs;
 
                 EXECUTE format('
-                UPDATE minefield mf
-                SET %I = $1
-                WHERE mf.row_id = $2 AND mf.%I != $3', 
+                    UPDATE minefield mf
+                    SET %I = $1
+                    WHERE mf.row_id = $2 AND mf.%I != $3', 
                 col_char, col_char) USING adj_bombs, r, 'M';
             END LOOP;
         END LOOP;
@@ -205,7 +205,6 @@ CREATE TABLE IF NOT EXISTS user_action(
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- need to find first available 0!
 CREATE OR REPLACE FUNCTION startingPoint()
     RETURNS VOID AS $$
     DECLARE 
@@ -317,33 +316,77 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TABLE IF EXISTS flags;
+CREATE TABLE IF NOT EXISTS flags(
+    row_id SERIAL PRIMARY KEY,
+    positionX INTEGER NOT NULL,
+    positionY INTEGER NOT NULL
+);
+
 CREATE OR REPLACE FUNCTION enter_action(uCol int, uRow int, uAct char) RETURNS VOID AS $$
 DECLARE
     col_char VARCHAR(1) := '';
-    current_value VARCHAR(1) := '';
     bomb_count VARCHAR(1) := '';
+    in_flag INTEGER := 0;
+    current VARCHAR(40) := '[ - ]';
 BEGIN
     col_char := CHR(64 + uCol);
 
     EXECUTE format('
-            SELECT mf.%I
-            FROM minefield mf
-            WHERE row_id = $1', col_char)
-        INTO bomb_count
-        USING uRow;
+        SELECT mf.%I
+        FROM minefield mf
+        WHERE row_id = $1', col_char)
+    INTO bomb_count
+    USING uRow;
     
     RAISE INFO '%, %', bomb_count, uAct;
 
-    IF bomb_count = '0' AND uAct = 'F' THEN
+    IF uAct = 'M' THEN
         -- zero open
         PERFORM nearest_neighbours(uCol, uRow);
     END IF;
 
+    -- indicates where user is after user enters action
     EXECUTE format('
         UPDATE user_display ud
         SET %I = $1
         WHERE ud.row_id = $2
     ', col_char) USING '[ X ]', uRow;
+
+    SELECT count(*)
+    FROM flags f
+    WHERE f.positionX = uCol AND f.positionY = uRow
+    INTO in_flag;
+
+    EXECUTE format('
+        SELECT ud.%I
+        FROM user_display ud
+        WHERE ud.row_id = $1', col_char)
+    INTO current
+    USING uRow;
+
+    -- toggle flag on
+    IF uAct = 'F' AND current = '[ X ]' THEN
+        IF in_flag = 0 THEN
+            EXECUTE format('
+                UPDATE user_display ud
+                SET %I = $1
+                WHERE ud.row_id = $2
+            ', col_char) USING '[ F ]', uRow;
+
+            INSERT INTO flags(positionX, positionY) VALUES(uCol, uRow);
+        ELSE
+            -- untoggle here & remove from flags
+            EXECUTE format('
+                UPDATE user_display ud
+                SET %I = $1
+                WHERE ud.row_id = $2
+            ', col_char) USING '[ X ]', uRow;
+
+            DELETE FROM flags WHERE positionX = uCol AND positionY = uRow;
+        END IF;
+    END IF;
+    
 END;
 $$ LANGUAGE plpgsql;
 
@@ -448,6 +491,7 @@ $$ LANGUAGE plpgsql;
 -- very first user selection -> zero-open -> this is how to start the game (if a revealed cell is zero, reveal all its neighbours)
 -- a 4 way flood -> how to determine WHEN EXISTS to show users tiles
 
+DROP TABLE IF EXISTS prev_tile;
 CREATE TABLE IF NOT EXISTS prev_tile(
     row_id SERIAL PRIMARY KEY,
     prev VARCHAR(40)
@@ -524,9 +568,10 @@ DECLARE
     uCol INTEGER := 0;
     uRow INTEGER := 0;
     col_char VARCHAR(1) := '';
-    previous VARCHAR(40) := '[ - ]';
+    updateValue VARCHAR(40) := '[ - ]';
     bomb_count VARCHAR(1) := ''; 
     uAction VARCHAR(1) := 'N';
+    in_flag INTEGER := 0;
 BEGIN
     SELECT up.positionY, up.positionX
     INTO uRow, uCol
@@ -535,8 +580,13 @@ BEGIN
     
     col_char := CHR(64 + uCol);
 
+    SELECT uA.action_type
+    INTO uAction
+    FROM user_action ua
+    WHERE ua.id = 1;
+
     SELECT pt.prev
-    INTO previous
+    INTO updateValue
     FROM prev_tile pt
     WHERE pt.row_id = 1;
 
@@ -544,15 +594,10 @@ BEGIN
         UPDATE user_display ud
         SET %I = $1
         WHERE ud.row_id = $2
-    ', col_char) USING previous, uRow;
-
+    ', col_char) USING updateValue, uRow;
     
-    SELECT uA.action_type
-    INTO uAction
-    FROM user_action ua
-    WHERE ua.id = 1;
-    
-    IF uAction = 'F' THEN
+    -- if the last action used was M
+    IF uAction = 'M' THEN
         EXECUTE format('
             SELECT mf.%I
             FROM minefield mf
@@ -560,13 +605,35 @@ BEGIN
         INTO bomb_count
         USING uRow;
 
-        previous := '[ ' || bomb_count || ' ]';
+        updateValue := '[ ' || bomb_count || ' ]';
 
         EXECUTE format('
             UPDATE user_display ud
             SET %I = $1
             WHERE ud.row_id = $2', col_char)
-        USING previous, uRow;
+        USING updateValue, uRow;        
+    END IF;
+
+    -- handle flags here
+    IF uAction = 'F' THEN
+        SELECT count(*)
+        FROM flags f
+        WHERE f.positionX = uCol AND f.positionY = uRow
+        INTO in_flag;
+
+        IF in_flag = 1 THEN
+            EXECUTE format('
+                UPDATE user_display ud
+                SET %I = $1
+                WHERE ud.row_id = $2
+            ', col_char) USING '[ F ]', uRow;
+        ELSE
+            EXECUTE format('
+                UPDATE user_display ud
+                SET %I = $1
+                WHERE ud.row_id = $2
+            ', col_char) USING '[ - ]', uRow;
+        END IF;
     END IF;
 
     UPDATE user_action ua
