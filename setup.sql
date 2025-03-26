@@ -211,10 +211,13 @@ CREATE OR REPLACE FUNCTION startingPoint()
     DECLARE 
         col_char VARCHAR(1) := '';
         bomb_count VARCHAR(1) := 0;
+        colIterate INTEGER := 1;
+        rowIterate INTEGER := 0;
     BEGIN
-        FOR colIterate IN 1..16 LOOP
-            FOR rowIterate IN 1..16 LOOP
+        LOOP
+            rowIterate := rowIterate + 1;
 
+            LOOP
                 col_char := CHR(64 + colIterate);
         
                 EXECUTE format('
@@ -224,38 +227,33 @@ CREATE OR REPLACE FUNCTION startingPoint()
                 INTO bomb_count
                 USING rowIterate;
 
-
-                -- TODO: gotta fix this, keeps erroring and saying no destination & does not insert properly into user position
+                colIterate := colIterate + 1;
 
                 IF bomb_count = '0' THEN
-                    SELECT notify(format('%s, %s, %s', bomb_count, colIterate, rowIterate));
+                    RAISE INFO '%, %, %', bomb_count, colIterate, rowIterate;
+
                     INSERT INTO user_position (positionX, positionY) VALUES (colIterate, rowIterate);
-                    EXIT;
+
+                    colIterate := 16;
+                    rowIterate := 16;
+
                 END IF;
+                
+                EXIT WHEN colIterate = 16;
             END LOOP;
+            
+            colIterate := 1;
+
+            EXIT WHEN rowIterate = 16;
         END LOOP;
     END
 $$ LANGUAGE plpgsql;
 
+SELECT startingPoint();
+
 INSERT INTO user_action (positionX, positionY, action_type) VALUES (0,0,'N');
 
 CREATE OR REPLACE FUNCTION move_up() RETURNS VOID AS $$
-BEGIN
-    UPDATE user_position
-    SET positionX = positionX - 1
-    WHERE id = 1 AND positionX != 1;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE OR REPLACE FUNCTION move_down() RETURNS VOID AS $$
-BEGIN
-    UPDATE user_position
-    SET positionX = positionX + 1
-    WHERE id = 1 AND positionX != 16;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE OR REPLACE FUNCTION move_left() RETURNS VOID AS $$
 BEGIN
     UPDATE user_position
     SET positionY = positionY - 1
@@ -263,11 +261,27 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION move_right() RETURNS VOID AS $$
+CREATE OR REPLACE FUNCTION move_down() RETURNS VOID AS $$
 BEGIN
     UPDATE user_position
     SET positionY = positionY + 1
     WHERE id = 1 AND positionY != 16;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION move_left() RETURNS VOID AS $$
+BEGIN
+    UPDATE user_position
+    SET positionX = positionX - 1
+    WHERE id = 1 AND positionX != 1;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION move_right() RETURNS VOID AS $$
+BEGIN
+    UPDATE user_position
+    SET positionX = positionX + 1
+    WHERE id = 1 AND positionX != 16;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -276,13 +290,13 @@ DECLARE
     uCol INTEGER := 0;
     uRow INTEGER := 0;
 BEGIN
-    SELECT up.positionX, up.positionY
+    SELECT up.positionY, up.positionX
     INTO uRow, uCol
     FROM user_position up
     WHERE up.id = 1;
 
     UPDATE user_action
-    SET positionX = uRow, positionY = uCol, action_type = 'F'
+    SET positionY = uRow, positionX = uCol, action_type = 'F'
     WHERE id = 1;
 END;
 $$ LANGUAGE plpgsql;
@@ -292,13 +306,13 @@ DECLARE
     uCol INTEGER := 0;
     uRow INTEGER := 0;
 BEGIN
-    SELECT up.positionX, up.positionY
+    SELECT up.positionY, up.positionX
     INTO uRow, uCol
     FROM user_position up
     WHERE up.id = 1;
 
     UPDATE user_action
-    SET positionX = uRow, positionY = uCol, action_type = 'M'
+    SET positionY = uRow, positionX = uCol, action_type = 'M'
     WHERE id = 1;
 END;
 $$ LANGUAGE plpgsql;
@@ -307,15 +321,88 @@ CREATE OR REPLACE FUNCTION enter_action(uCol int, uRow int, uAct char) RETURNS V
 DECLARE
     col_char VARCHAR(1) := '';
     current_value VARCHAR(1) := '';
+    bomb_count VARCHAR(1) := '';
 BEGIN
     col_char := CHR(64 + uCol);
 
     EXECUTE format('
-        SELECT mf.%I
-        FROM minefield mf
-        WHERE row_id = $1',
-        col_char) USING uRow;
+            SELECT mf.%I
+            FROM minefield mf
+            WHERE row_id = $1', col_char)
+        INTO bomb_count
+        USING uRow;
     
+    RAISE INFO '%, %', bomb_count, uAct;
+
+    IF bomb_count = '0' AND uAct = 'F' THEN
+        -- zero open
+        PERFORM nearest_neighbours(uCol, uRow);
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP FUNCTION nearest_neighbours(uCol int, uRow int);
+CREATE OR REPLACE FUNCTION nearest_neighbours(uCol int, uRow int) RETURNS VOID AS $$
+DECLARE
+    col_char VARCHAR(1) := '';
+    bomb_count VARCHAR(1) := '';
+BEGIN
+    FOR i IN -1..1 LOOP -- check from top left
+        FOR j IN -1..1 LOOP -- to bottom right
+            IF i = 0 AND j = 0 THEN  -- skip the center cell
+            ELSE
+                IF uCol = 1 AND j = -1 OR uCol = 16 AND j = 1 OR uRow = 1 AND i = -1 OR uRow = 16 AND i = 1 THEN
+                ELSE
+                    col_char := CHR(64 + uCol + j);
+
+                    RAISE INFO '%, %', col_char, uRow + i;
+
+                    EXECUTE format('
+                        SELECT mf.%I
+                        FROM minefield mf
+                        WHERE mf.row_id = $1', col_char)
+                    INTO bomb_count
+                    USING uRow + i;
+
+                    RAISE INFO '%', bomb_count;
+
+                    EXECUTE format('
+                        UPDATE user_display ud
+                        SET %I = CASE
+                            WHEN $1 = %L THEN %L
+                            WHEN $1 = %L THEN %L
+                            WHEN $1 = %L THEN %L
+                            WHEN $1 = %L THEN %L
+                            WHEN $1 = %L THEN %L
+                            WHEN $1 = %L THEN %L
+                            WHEN $1 = %L THEN %L
+                            WHEN $1 = %L THEN %L
+                            WHEN $1 = %L THEN %L
+                            ELSE %I
+                        END
+                        WHERE ud.row_id = $2',
+                        col_char, 
+                        '0', '[ 0 ]',
+                        '1', '[ 1 ]',
+                        '2', '[ 2 ]',
+                        '3', '[ 3 ]',
+                        '4', '[ 4 ]',
+                        '5', '[ 5 ]',
+                        '6', '[ 6 ]',
+                        '7', '[ 7 ]',
+                        '8', '[ 8 ]',
+                        col_char)
+                    USING bomb_count, uRow + i;
+
+                    -- only recursive function IF the user display is [ - ] AKA untouched
+                    IF bomb_count = '0' THEN
+                        -- TODO: recursive call
+                    END IF;
+
+                END IF;
+            END IF;
+        END LOOP;
+    END LOOP;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -327,6 +414,13 @@ $$ LANGUAGE plpgsql;
 -- THEN:
 -- very first user selection -> zero-open -> this is how to start the game (if a revealed cell is zero, reveal all its neighbours)
 -- a 4 way flood -> how to determine WHEN EXISTS to show users tiles
+
+CREATE TABLE IF NOT EXISTS prev_tile(
+    row_id SERIAL PRIMARY KEY,
+    prev VARCHAR(40)
+);
+
+INSERT INTO prev_tile(prev) VALUES('[ - ]');
 
 DROP FUNCTION display_state();
 CREATE OR REPLACE FUNCTION display_state() RETURNS TABLE(
@@ -354,8 +448,9 @@ DECLARE
     uRow INTEGER := 0;
     col_char VARCHAR(1) := '';
     uAction VARCHAR(10) := '';
+    previous VARCHAR(10) := '';
 BEGIN
-    SELECT up.positionX, up.positionY
+    SELECT up.positionY, up.positionX
     INTO uRow, uCol
     FROM user_position up
     WHERE up.id = 1;
@@ -364,8 +459,20 @@ BEGIN
     INTO uAction
     FROM user_action ua
     WHERE ua.id = 1;
-    
+
     col_char := CHR(64 + uCol);
+
+    EXECUTE format('
+        SELECT %I
+        FROM user_display ud
+        WHERE row_id = $1
+    ', col_char)
+    INTO previous
+    USING uRow;
+
+    UPDATE prev_tile pt
+    SET prev = previous
+    WHERE pt.row_id = 1;
 
     EXECUTE format('
         UPDATE user_display ud
@@ -384,18 +491,29 @@ DECLARE
     uCol INTEGER := 0;
     uRow INTEGER := 0;
     col_char VARCHAR(1) := '';
+    previous VARCHAR(40) := '[ - ]';
 BEGIN
-    SELECT up.positionX, up.positionY
+    SELECT up.positionY, up.positionX
     INTO uRow, uCol
     FROM user_position up
     WHERE up.id = 1;
     
     col_char := CHR(64 + uCol);
 
+    SELECT pt.prev
+    INTO previous
+    FROM prev_tile pt
+    WHERE pt.row_id = 1;
+
     EXECUTE format('
         UPDATE user_display ud
         SET %I = $1
         WHERE ud.row_id = $2
-    ', col_char) USING '[ - ]', uRow;
+    ', col_char) USING previous, uRow;
+
+    UPDATE user_action ua
+    SET action_type = 'N'
+    WHERE ua.id = 1;
+
 END $$
 LANGUAGE plpgsql;

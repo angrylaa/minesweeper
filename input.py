@@ -37,8 +37,20 @@ def execute_action(action):
             print(e)
 
 print("Enter movement keys (WASD) or actions (M/F). Type 'exit' to quit.")
+
+# print initial state
+cursor.execute("SELECT display_state()")
+print('\n')
+for record in cursor:
+    cleaned_line = record[0].translate({ord(c): None for c in ',()"'})
+    print(cleaned_line.replace("'", ""))
+cursor.execute("SELECT clear_movement()")
+
+
+# game loop
 while True:
     event = keyboard.read_event()
+
     if event.event_type == keyboard.KEY_DOWN:
         key = event.name
         if key == "q":
@@ -53,6 +65,5 @@ while True:
             print(cleaned_line.replace("'", ""))
 
         cursor.execute("SELECT clear_movement()")
-
 
 conn.close()
