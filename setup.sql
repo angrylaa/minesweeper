@@ -430,11 +430,21 @@ BEGIN
         WHERE row_id = $1', col_char)
     INTO current_cell_value
     USING y_cord;
+
+    RAISE INFO '%', current_cell_value;
     
     -- if the bomb is 0 & the user tries to reveal
     IF current_cell_value = '0' AND uAct = 'R' THEN
         -- zero open & reveal nearest neighbour
         PERFORM nearest_neighbours(x_cord, y_cord);
+    END IF;
+
+    IF current_cell_value = 'M' AND uAct = 'R' THEN
+        RAISE INFO 'MINE FOUND';
+
+        UPDATE user_action
+        SET action_type = 'L'
+        WHERE id = 1;
     END IF;
 
     -- check if the current cell has a record in the flag table
@@ -489,6 +499,8 @@ BEGIN
         SET %I = $1
         WHERE ud.row_id = $2
     ', col_char) USING '[ X ]', y_cord;
+
+    RAISE NOTICE '%, ACTION', uAct;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -569,7 +581,6 @@ BEGIN
                             PERFORM nearest_neighbours(x_cord + j, y_cord + i);
                         END IF;
                     END IF;
-
                 END IF;
             END IF;
         END LOOP;
@@ -634,7 +645,37 @@ BEGIN
 
     PERFORM enter_action(x_cord, y_cord, uAction);
 
-    RETURN QUERY SELECT "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P" FROM user_display ORDER BY row_id;
+    SELECT uA.action_type
+    INTO uAction
+    FROM user_action ua
+    WHERE ua.id = 1;
+
+    RAISE NOTICE '%, action', uAction;
+
+    IF uAction = 'L' THEN
+        RAISE NOTICE 'game over';
+        RETURN QUERY SELECT
+            'G'::VARCHAR(40) AS "A",
+            'A'::VARCHAR(40) AS "B",
+            'M'::VARCHAR(40) AS "C",
+            'E'::VARCHAR(40) AS "D",
+            '-'::VARCHAR(40) AS "E",
+            'O'::VARCHAR(40) AS "F",
+            'V'::VARCHAR(40) AS "G",
+            'E'::VARCHAR(40) AS "H",
+            'R'::VARCHAR(40) AS "I",
+            '-'::VARCHAR(40) AS "J",
+            '-'::VARCHAR(40) AS "K",
+            '-'::VARCHAR(40) AS "L",
+            '-'::VARCHAR(40) AS "M",
+            '-'::VARCHAR(40) AS "N",
+            '-'::VARCHAR(40) AS "O",
+            '-'::VARCHAR(40) AS "P";
+    ELSE
+        RETURN QUERY SELECT "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P" 
+        FROM user_display
+        ORDER BY row_id;
+    END IF;
 END;
 $$;
 

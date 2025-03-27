@@ -49,9 +49,10 @@ for record in cursor:
     print(cleaned_line.replace("F", "⚑").replace("X","★").replace("-"," "))
 cursor.execute("SELECT clear_movement()")
 
+game_over = True
 
 # game loop
-while True:
+while game_over:
     event = keyboard.read_event()
 
     if event.event_type == keyboard.KEY_DOWN:
@@ -65,7 +66,19 @@ while True:
         clear_terminal()
         for record in cursor:
             cleaned_line = record[0].translate({ord(c): None for c in ',()"'})
-            print(cleaned_line.replace("F", "⚑").replace("X", "★").replace("-"," ").replace(" M ", "💣 "))
+            parsed_line = cleaned_line.replace("F", "⚑").replace("X", "★").replace("-"," ").replace(" M ", "💣 ")
+            
+            if 'GAME' in parsed_line:
+                game_over = False
+                print("Thanks for playing ✌  You lost!")
+                print(r"""
+ _._     _,-'""`-._
+(,-.`._,'(       |\`-/|
+    `-.-' \ )-`( , o o)
+          `-    \`_`"'-
+                      """)
+            else:
+                print(parsed_line)
 
         cursor.execute("SELECT clear_movement()")
 
