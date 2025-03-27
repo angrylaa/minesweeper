@@ -96,6 +96,13 @@ CREATE TABLE IF NOT EXISTS visited(
     positionY INTEGER NOT NULL
 );
 
+-- tracks how many tiles are revealed
+DROP TABLE IF EXISTS revealed;
+CREATE TABLE IF NOT EXISTS revealed(
+    id SERIAL PRIMARY KEY,
+    revealedTiles INTEGER NOT NULL
+);
+
 -- INSERT & BEGINNING STAGE OF TABLES
 INSERT INTO minefield("A") VALUES (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0);
 INSERT INTO user_display("A") VALUES ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]'), ('[ - ]');
@@ -432,20 +439,6 @@ BEGIN
     USING y_cord;
 
     RAISE INFO '%', current_cell_value;
-    
-    -- if the bomb is 0 & the user tries to reveal
-    IF current_cell_value = '0' AND uAct = 'R' THEN
-        -- zero open & reveal nearest neighbour
-        PERFORM nearest_neighbours(x_cord, y_cord);
-    END IF;
-
-    IF current_cell_value = 'M' AND uAct = 'R' THEN
-        RAISE INFO 'MINE FOUND';
-
-        UPDATE user_action
-        SET action_type = 'L'
-        WHERE id = 1;
-    END IF;
 
     -- check if the current cell has a record in the flag table
     -- output: 0 → this cell has not been flagged
@@ -493,6 +486,25 @@ BEGIN
         END IF;
     END IF;
 
+    IF uAct = 'R' THEN
+        -- if the bomb is 0 & the user tries to reveal
+        IF current_cell_value = '0' THEN
+            -- zero open & reveal nearest neighbour
+            PERFORM nearest_neighbours(x_cord, y_cord);
+        ELSE 
+            IF current_cell_value = 'M' THEN
+                RAISE INFO 'MINE FOUND';
+
+                UPDATE user_action
+                SET action_type = 'L'
+                WHERE id = 1;
+                
+            ELSIF update_value != '[ - ]' THEN
+                PERFORM chording(x_cord, y_cord);
+            END IF;
+        END IF;
+    END IF;
+
     -- update the user_display with the [ X ] marker
     EXECUTE format('
         UPDATE user_display ud
@@ -501,6 +513,76 @@ BEGIN
     ', col_char) USING '[ X ]', y_cord;
 
     RAISE NOTICE '%, ACTION', uAct;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ### FUNCTION: 
+-- col_char = stored the character converted x-coord
+CREATE OR REPLACE FUNCTION chording(x_cord int, y_cord int) RETURNS VOID AS $$
+DECLARE
+    col_char VARCHAR(1) := '';
+    bomb_count VARCHAR(1) := '';
+    previous VARCHAR(10) := '';
+    update_value VARCHAR(40) := '[ - ]';
+BEGIN
+    FOR i IN -1..1 LOOP -- check from top left
+        FOR j IN -1..1 LOOP -- to bottom right
+            IF i = 0 AND j = 0 THEN  -- skip the center cell
+            ELSE
+                IF x_cord = 1 AND j = -1 OR x_cord = 16 AND j = 1 OR y_cord = 1 AND i = -1 OR y_cord = 16 AND i = 1 THEN
+                ELSE
+                    col_char := CHR(64 + x_cord + j);
+
+                    RAISE INFO '%, %', col_char, y_cord + i;
+
+                    EXECUTE format('
+                        SELECT mf.%I
+                        FROM minefield mf
+                        WHERE mf.row_id = $1', col_char)
+                    INTO bomb_count
+                    USING y_cord + i;
+
+                    RAISE INFO '%', bomb_count;
+
+                    EXECUTE format('
+                        SELECT %I
+                        FROM user_display ud
+                        WHERE row_id = $1
+                    ', col_char)
+                    INTO previous
+                    USING y_cord + i;
+
+                    IF bomb_count = 'M' AND previous = '[ - ]' THEN
+                        RAISE INFO 'MINE FOUND';
+                        UPDATE user_action
+                        SET action_type = 'L'
+                        WHERE id = 1;
+                    ELSIF bomb_count = '0' THEN
+                        PERFORM nearest_neighbours(x_cord, y_cord);
+                    ELSE
+                        EXECUTE format('
+                            SELECT mf.%I
+                            FROM minefield mf
+                            WHERE mf.row_id = $1', col_char)
+                        INTO bomb_count
+                        USING y_cord + i;
+
+                        IF bomb_count = 'M' THEN
+                            update_value := '[ F ]';
+                        ELSE
+                            update_value := '[ ' || bomb_count || ' ]';
+                        END IF;
+
+                        EXECUTE format('
+                            UPDATE user_display ud
+                            SET %I = $1
+                            WHERE ud.row_id = $2', col_char)
+                        USING update_value, y_cord + i;     
+                    END IF;
+                END IF;
+            END IF;
+        END LOOP;
+    END LOOP;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -585,6 +667,14 @@ BEGIN
             END IF;
         END LOOP;
     END LOOP;
+
+    SELECT count(*)
+    FROM visited v
+    INTO is_visited;
+
+    UPDATE revealed r
+    SET revealedTiles = revealedTiles + is_visited
+    WHERE r.id = 1;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -715,7 +805,7 @@ BEGIN
         WHERE ud.row_id = $2
     ', col_char) USING update_value, y_cord;
     
-    -- if the last action used was M
+    -- if the last action used was R
     IF uAction = 'R' THEN
         EXECUTE format('
             SELECT mf.%I
@@ -730,7 +820,11 @@ BEGIN
             UPDATE user_display ud
             SET %I = $1
             WHERE ud.row_id = $2', col_char)
-        USING update_value, y_cord;        
+        USING update_value, y_cord;     
+
+        UPDATE revealed r
+        SET revealedTiles = revealedTiles + 1
+        WHERE r.id = 1;
     END IF;
 
     RAISE NOTICE '%, %, %, HERE IS THE TABLE', bomb_count, uAction, update_value;

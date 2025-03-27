@@ -41,6 +41,12 @@ def execute_action(action):
             print(e)
 
 print("Enter movement keys (WASD) to move your icon -> ★ \nActions -> (R to reveal a spot / F to flag a spot).")
+print("Wherever your indicator start will always have 0 mines.\nChording is enabled, press R on a number to reveal all open spaces around the cell.\n")
+
+while True:
+    start = input("Enter q to start/quit: ")
+    if start == 'q' or start == 'Q':
+        break
 
 # print initial state
 cursor.execute("SELECT display_state()")
@@ -49,15 +55,15 @@ for record in cursor:
     print(cleaned_line.replace("F", "⚑").replace("X","★").replace("-"," "))
 cursor.execute("SELECT clear_movement()")
 
-game_over = True
+game_running = True
 
 # game loop
-while game_over:
+while game_running:
     event = keyboard.read_event()
 
     if event.event_type == keyboard.KEY_DOWN:
         key = event.name
-        if key == "q":
+        if key == "q" or key == 'Q':
             break
         execute_action(key)
         conn.commit()
@@ -66,10 +72,10 @@ while game_over:
         clear_terminal()
         for record in cursor:
             cleaned_line = record[0].translate({ord(c): None for c in ',()"'})
-            parsed_line = cleaned_line.replace("F", "⚑").replace("X", "★").replace("-"," ").replace(" M ", "💣 ")
+            parsed_line = cleaned_line.replace("F", "⚑").replace("X", "★").replace("-"," ")
             
             if 'GAME' in parsed_line:
-                game_over = False
+                game_running = False
                 print("Thanks for playing ✌  You lost!")
                 print(r"""
  _._     _,-'""`-._
