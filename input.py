@@ -29,7 +29,7 @@ action_map = {
     's': "SELECT move_down()",
     'd': "SELECT move_right()",
     'f': "SELECT flag()",
-    'm': "SELECT mark()",
+    'r': "SELECT mark()",
 }
 
 def execute_action(action):
@@ -40,7 +40,7 @@ def execute_action(action):
         except Exception as e:
             print(e)
 
-print("Enter movement keys (WASD) to move your icon -> ★ \nActions -> (M to open a spot / F to flag a spot).")
+print("Enter movement keys (WASD) to move your icon -> ★ \nActions -> (R to reveal a spot / F to flag a spot).")
 
 # print initial state
 cursor.execute("SELECT display_state()")
@@ -65,7 +65,7 @@ while True:
         clear_terminal()
         for record in cursor:
             cleaned_line = record[0].translate({ord(c): None for c in ',()"'})
-            print(cleaned_line.replace("F", "⚑").replace("X", "★").replace("-"," "))
+            print(cleaned_line.replace("F", "⚑").replace("X", "★").replace("-"," ").replace(" M ", "💣 "))
 
         cursor.execute("SELECT clear_movement()")
 
