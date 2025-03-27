@@ -1,5 +1,5 @@
 # minesweeper
 
 # demo video
-https://github.com/user-attachments/assets/5e5a7c5d-87ef-4d36-846c-5f4e845e4bf3
+https://github.com/user-attachments/assets/ef827d45-d3e0-4fef-8927-d6c29a6f3bbe
 
