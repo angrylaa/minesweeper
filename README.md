@@ -1,9 +1,5 @@
 # minesweeper
 
-# gameplay loop
-1. user uses wasd to select a square to start w/
-2. map is generated based on algorithm
-3. user continues to use wasd to move
-    - f will flag
-    - m will mark
-4. if user marks a bomb, the map gets revealed
+# demo video
+https://github.com/user-attachments/assets/ef827d45-d3e0-4fef-8927-d6c29a6f3bbe
+
