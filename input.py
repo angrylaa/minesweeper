@@ -6,10 +6,10 @@ import os
 def clear_terminal():
     os.system('cls' if os.name == 'nt' else 'clear')
 
-conn = psycopg2.connect(database="minesweeper", 
+conn = psycopg2.connect(database="db", 
                         host="localhost", 
-                        user="postgres", 
-                        password="ethoslab", 
+                        user="user", 
+                        password="password", 
                         port="5433")
 
 cursor = conn.cursor()
