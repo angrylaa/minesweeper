@@ -612,14 +612,33 @@ BEGIN
                     INTO current_cell_value
                     USING y_cord + i;
 
-                    -- update the user_display based on the value 
-                    update_value := '[ ' || current_cell_value || ' ]';
-
                     EXECUTE format('
                         UPDATE user_display ud
-                        SET %I = $1
-                        WHERE ud.row_id = $2', col_char)
-                    USING update_value, y_cord + i;
+                        SET %I = CASE
+                            WHEN $1 = %L THEN %L
+                            WHEN $1 = %L THEN %L
+                            WHEN $1 = %L THEN %L
+                            WHEN $1 = %L THEN %L
+                            WHEN $1 = %L THEN %L
+                            WHEN $1 = %L THEN %L
+                            WHEN $1 = %L THEN %L
+                            WHEN $1 = %L THEN %L
+                            WHEN $1 = %L THEN %L
+                            ELSE %I
+                        END
+                        WHERE ud.row_id = $2',
+                        col_char, 
+                        '0', '[ 0 ]',
+                        '1', '[ 1 ]',
+                        '2', '[ 2 ]',
+                        '3', '[ 3 ]',
+                        '4', '[ 4 ]',
+                        '5', '[ 5 ]',
+                        '6', '[ 6 ]',
+                        '7', '[ 7 ]',
+                        '8', '[ 8 ]',
+                        col_char)
+                    USING current_cell_value, y_cord + i;
 
                     -- updates which cells have been visited
                     -- this prevents the recursion from being endless
@@ -843,7 +862,7 @@ BEGIN
         INTO in_flag;
 
         -- if the flag does exist & the current cell is not revealed / unopened
-        IF in_flag = 1 AND current_cell_value = '[ - ]' THEN
+        IF in_flag = 1 AND display_cell_value = '[ - ]' THEN
             -- set the current cell to be flagged (user toggles)
             EXECUTE format('
                 UPDATE user_display ud
@@ -852,7 +871,7 @@ BEGIN
             ', col_char) USING '[ F ]', y_cord;
         END IF;
         -- if the flag doesn't exist & the current cell is flagged
-        IF in_flag = 0 AND current_cell_value = '[ F ]' THEN
+        IF in_flag = 0 AND display_cell_value = '[ F ]' THEN
             -- set the current cell to be unrevealed (user untoggles)
             EXECUTE format('
                 UPDATE user_display ud
