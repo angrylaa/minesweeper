@@ -10,11 +10,11 @@ https://github.com/user-attachments/assets/ef827d45-d3e0-4fef-8927-d6c29a6f3bbe
 **************
 ### Installation
 1. Set up an SQL server:
-  a. With Docker -> this requires you have Docker installed.
+  With Docker -> this requires you have Docker installed.
   ```
   docker run --name minesweeper -d -p 2022:5432 -e POSTGRES_PASSWORD=postgres postgres
   ```
-  b. If you set up your own server, you'll have to change the credentials.
+  If you set up your own server, you'll have to change the credentials.
 2. Install the dependencies required for this:
 ```
 pip install keyboard psycopg2
