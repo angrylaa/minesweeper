@@ -666,7 +666,6 @@ $$ LANGUAGE plpgsql;
 -- uAction = gets the current action from the user
 -- user_display_value = 
 
-DROP FUNCTION display_state();
 CREATE OR REPLACE FUNCTION display_state() RETURNS TABLE(
         "A" VARCHAR(40),
         "B" VARCHAR(40),

@@ -6,11 +6,11 @@ import os
 def clear_terminal():
     os.system('cls' if os.name == 'nt' else 'clear')
 
-conn = psycopg2.connect(database="db", 
+conn = psycopg2.connect(database="postgres", 
                         host="localhost", 
-                        user="user", 
-                        password="password", 
-                        port="5433")
+                        user="postgres", 
+                        password="postgres", 
+                        port="2022")
 
 cursor = conn.cursor()
 
@@ -19,9 +19,6 @@ with open('setup.sql', 'r') as file:
     sql_script = file.read()
     
 cursor.execute(sql_script)
-
-# for row in results:
-#     print(row)
 
 action_map = {
     'w': 'SELECT move_up()',
